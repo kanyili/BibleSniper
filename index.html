@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>手指跑步競速測試</title>
+    <title>手指跑步競速（座標分邊版）</title>
     <style>
         :root {
             --bg-color: #0b0f19;          
@@ -222,12 +222,12 @@
 
         <div id="ui-layer">
             <div class="player-zone" id="zone-p1">
-                <div class="player-header">左手步數</div>
+                <div class="player-header">左側區域步數</div>
                 <div class="step-count" id="score-p1">0</div>
             </div>
 
             <div class="player-zone" id="zone-p2">
-                <div class="player-header">右手步數</div>
+                <div class="player-header">右側區域步數</div>
                 <div class="step-count" id="score-p2">0</div>
             </div>
         </div>
@@ -249,8 +249,8 @@
         let webcamRunning = false;
         let lastVideoTime = -1;
 
-        // 紀錄兩隻手的跑步步數與動作狀態
-        const handStats = {
+        // 紀錄左右兩側區域的步數與狀態
+        const sideStats = {
             left: { steps: 0, lastY: 0, movingUp: false },
             right: { steps: 0, lastY: 0, movingUp: false }
         };
@@ -266,7 +266,6 @@
         const scoreP1El = document.getElementById('score-p1');
         const scoreP2El = document.getElementById('score-p2');
 
-        // 1. 預先載入 HandLandmarker 模型
         async function preloadModel() {
             try {
                 startBtn.innerText = "正在載入 WASM...";
@@ -280,7 +279,7 @@
                         delegate: "GPU"
                     },
                     runningMode: "VIDEO",
-                    numHands: 2 // 最多同時偵測兩隻手
+                    numHands: 2
                 });
                 startBtn.disabled = false;
                 startBtn.innerText = "開始遊戲";
@@ -310,7 +309,6 @@
             }
         });
 
-        // 2. 即時手部偵測與跑步步數計算
         async function predictWebcam() {
             if (canvasElement.width !== webcamVideo.videoWidth || canvasElement.height !== webcamVideo.videoHeight) {
                 canvasElement.width = webcamVideo.videoWidth;
@@ -326,41 +324,28 @@
                 canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
                 let rawHands = handResult.landmarks || [];
-                let handednesses = handResult.handednesses || []; // 判斷是左手還是右手
 
-                // 畫出手指關節
                 for (const landmarks of rawHands) {
                     drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: '#00F3FF', lineWidth: 2 });
                     drawingUtils.drawLandmarks(landmarks, { color: '#FF0055', radius: 3 });
                 }
 
-                // 重置當前影格偵測狀態
-                let detectedLeft = false;
-                let detectedRight = false;
-
                 for (let i = 0; i < rawHands.length; i++) {
                     const landmarks = rawHands[i];
-                    // MediaPipe 的 handedness 通常是以攝影機視角為主，這裡可以透過左右畫面位置輔助
-                    // 抓取食指指尖 (索引 8) 的 Y 座標來判斷上下晃動（跑步步數）
-                    const indexFingerTip = landmarks[8];
-                    const wrist = landmarks[0];
-                    const centerX = wrist.x;
-
-                    // 簡單以畫面左右分邊辨識左手與右手
-                    let handKey = centerX >= 0.5 ? 'left' : 'right'; 
+                    const indexFingerTip = landmarks[8]; // 食指指尖
+                    const wrist = landmarks[0];          // 手腕中心點 X 座標
                     
-                    if (handKey === 'left') detectedLeft = true;
-                    if (handKey === 'right') detectedRight = true;
+                    // 【關鍵修改】純粹依據手腕的 X 座標分邊（畫面經過鏡像翻轉，X >= 0.5 視為畫面右側，反之左側）
+                    let sideKey = wrist.x >= 0.5 ? 'left' : 'right'; 
 
-                    // 簡易步數計步邏輯：利用食指上下上下晃動的波峰波谷
                     let currentY = indexFingerTip.y;
-                    let stats = handStats[handKey];
+                    let stats = sideStats[sideKey];
 
-                    // 門檻值判斷上下交替（數值越小代表越往畫面上方）
+                    // 簡易計步邏輯：食指上下晃動
                     if (currentY - stats.lastY < -0.03 && !stats.movingUp) {
                         stats.movingUp = true;
-                        stats.steps++; // 往前跨一步
-                        if (handKey === 'left') scoreP1El.innerText = stats.steps;
+                        stats.steps++;
+                        if (sideKey === 'left') scoreP1El.innerText = stats.steps;
                         else scoreP2El.innerText = stats.steps;
                     } else if (currentY - stats.lastY > 0.03) {
                         stats.movingUp = false;
