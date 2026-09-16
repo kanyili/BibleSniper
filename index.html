@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>手指跑步競速（雙指交替版）</title>
+    <title>手指跑步競速（精簡判定點版）</title>
     <style>
         :root {
             --bg-color: #0b0f19;          
@@ -233,17 +233,17 @@
         </div>
 
         <div id="command-container">
-            <div id="command-display">請將雙指伸入鏡頭跑步</div>
+            <div id="command-display">請將食指與中指伸入鏡頭跑步</div>
         </div>
 
         <div id="overlay-screen" class="interactive">
-            <h1 class="game-title">手指跑步競速（雙指交替版）</h1>
+            <h1 class="game-title">手指跑步競速</h1>
             <button class="btn-primary" id="start-btn" disabled>正在初始化手部模組...</button>
         </div>
     </div>
 
     <script type="module">
-        import { HandLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/vision_bundle.mjs";
+        import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/vision_bundle.mjs";
 
         let handLandmarker = undefined;
         let webcamRunning = false;
@@ -260,7 +260,6 @@
         const webcamVideo = document.getElementById('webcam-video');
         const canvasElement = document.getElementById('game-canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        const drawingUtils = new DrawingUtils(canvasCtx);
 
         const commandDisplay = document.getElementById('command-display');
         const scoreP1El = document.getElementById('score-p1');
@@ -324,27 +323,42 @@
                 canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
                 let rawHands = handResult.landmarks || [];
+                const w = canvasElement.width;
+                const h = canvasElement.height;
 
-                for (const landmarks of rawHands) {
-                    drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: '#00F3FF', lineWidth: 2 });
-                    drawingUtils.drawLandmarks(landmarks, { color: '#FF0055', radius: 3 });
-                }
-
+                // 迴圈處理每一隻偵測到的手
                 for (let i = 0; i < rawHands.length; i++) {
                     const landmarks = rawHands[i];
-                    const wrist = landmarks[0];          // 手腕中心點 X 座標
-                    const indexTip = landmarks[8];       // 食指指尖 (點 8)
-                    const middleTip = landmarks[12];     // 中指指尖 (點 12)
+                    const wrist = landmarks[0];          // 手腕 (點 0) - 判定左右邊
+                    const indexTip = landmarks[8];       // 食指指尖 (點 8) - 跑步腳 1
+                    const middleTip = landmarks[12];     // 中指指尖 (點 12) - 跑步腳 2
                     
-                    // 以畫面 X 座標分邊（畫面鏡像後，X >= 0.5 為右側，反之左側）
+                    // 1. 繪製手腕追蹤點（顯示系統有抓到手）
+                    canvasCtx.fillStyle = '#00f3ff';
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(wrist.x * w, wrist.y * h, 6, 0, 2 * Math.PI);
+                    canvasCtx.fill();
+
+                    // 2. 繪製食指與中指指尖（顯示核心跑步判定點）
+                    canvasCtx.fillStyle = '#00ffcc';
+                    [indexTip, middleTip].forEach(tip => {
+                        canvasCtx.beginPath();
+                        canvasCtx.arc(tip.x * w, tip.y * h, 10, 0, 2 * Math.PI);
+                        canvasCtx.fill();
+                        canvasCtx.strokeStyle = '#ffffff';
+                        canvasCtx.lineWidth = 2;
+                        canvasCtx.stroke();
+                    });
+
+                    // 左右分邊（畫面鏡像後，X >= 0.5 為右側，反之左側）
                     let sideKey = wrist.x >= 0.5 ? 'left' : 'right'; 
                     let stats = sideStats[sideKey];
 
-                    // 檢查食指或中指是否有往上抬起的動作（波峰偵測）
+                    // 檢查食指或中指是否有往上抬起的動作
                     let indexMovedUp = (indexTip.y - stats.lastIndexY < -0.025);
                     let middleMovedUp = (middleTip.y - stats.lastMiddleY < -0.025);
 
-                    // 雙指交替檢核邏輯：必須輪流抬起（不能連續用同一根手指作弊）
+                    // 雙指交替檢核邏輯
                     if (indexMovedUp && stats.lastActiveFinger !== 'index') {
                         stats.lastActiveFinger = 'index';
                         stats.steps++;
