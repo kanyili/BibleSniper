@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>手指跑步競速（嚴格防作弊版）</title>
+    <title>手指跑步競速（防橫移作弊升級版）</title>
     <style>
         :root {
             --bg-color: #0b0f19;          
@@ -213,7 +213,7 @@
     <div id="rotate-warning">
         <div class="icon">📱</div>
         <h2>請將手機轉為橫向</h2>
-        <p>本遊戲需使用橫向畫面進行手指跑步競速</p>
+        <p>本遊戲需使用橫向畫面進行手指跑步競速123</p>
     </div>
 
     <div id="game-container">
@@ -233,11 +233,11 @@
         </div>
 
         <div id="command-container">
-            <div id="command-display">請將食指與中指伸入鏡頭跑步</div>
+            <div id="command-display">請確實交替上下點擊跑步！</div>
         </div>
 
         <div id="overlay-screen" class="interactive">
-            <h1 class="game-title">手指跑步競速</h1>
+            <h1 class="game-title">手指跑步競速（防作弊升級版）</h1>
             <button class="btn-primary" id="start-btn" disabled>正在初始化手部模組...</button>
         </div>
     </div>
@@ -249,10 +249,10 @@
         let webcamRunning = false;
         let lastVideoTime = -1;
 
-        // 紀錄左右兩側區域的雙指跑步狀態（包含 X 與 Y 座標供位移計算）
+        // 紀錄左右兩側區域的狀態機（加入 baseY 基準點與上下狀態判定）
         const sideStats = {
-            left: { steps: 0, lastIndexX: 0, lastIndexY: 0, lastMiddleX: 0, lastMiddleY: 0, lastActiveFinger: null },
-            right: { steps: 0, lastIndexX: 0, lastIndexY: 0, lastMiddleX: 0, lastMiddleY: 0, lastActiveFinger: null }
+            left: { steps: 0, indexState: 'DOWN', middleState: 'DOWN', baseY: null, lastActiveFinger: null },
+            right: { steps: 0, indexState: 'DOWN', middleState: 'DOWN', baseY: null, lastActiveFinger: null }
         };
 
         const startBtn = document.getElementById('start-btn');
@@ -351,42 +351,48 @@
                     let sideKey = wrist.x >= 0.5 ? 'left' : 'right'; 
                     let stats = sideStats[sideKey];
 
-                    // 計算 X 軸與 Y 軸的位移量
-                    let indexDeltaY = indexTip.y - stats.lastIndexY;
-                    let indexDeltaX = Math.abs(indexTip.x - stats.lastIndexX);
+                    // 初始化或用手腕位置動態跟隨計算基礎高度（適應手部遠近晃動）
+                    if (stats.baseY === null) {
+                        stats.baseY = (indexTip.y + middleTip.y) / 2;
+                    } else {
+                        // 讓 baseY 平滑跟隨手部整體的平均高度
+                        stats.baseY = stats.baseY * 0.95 + ((indexTip.y + middleTip.y) / 2) * 0.05;
+                    }
 
-                    let middleDeltaY = middleTip.y - stats.lastMiddleY;
-                    let middleDeltaX = Math.abs(middleTip.x - stats.lastMiddleX);
+                    // 檢查食指狀態機
+                    // 當手指抬高超過基準線一定距離 (例如 -0.035)，且之前是 DOWN，才切換為 UP
+                    if (indexTip.y < stats.baseY - 0.035) {
+                        if (stats.indexState === 'DOWN' && stats.lastActiveFinger !== 'index') {
+                            stats.indexState = 'UP';
+                            stats.lastActiveFinger = 'index';
+                            stats.steps++;
+                        }
+                    } 
+                    // 當手指放回低於基準線附近，重設為 DOWN 狀態以準備下一次抬起
+                    else if (indexTip.y > stats.baseY - 0.015) {
+                        stats.indexState = 'DOWN';
+                    }
 
-                    // 【嚴格防作弊條件】：
-                    // 1. Y 軸向上起伏必須夠大（門檻從 -0.025 提升至更嚴格的 -0.04）
-                    // 2. 必須排除水平干擾：垂直向上的位移量必須明顯大於水平位移量（indexDeltaY < -0.04 且 |indexDeltaY| > indexDeltaX * 1.5）
-                    let indexMovedUpStrict = (indexDeltaY < -0.04 && Math.abs(indexDeltaY) > indexDeltaX * 1.5);
-                    let middleMovedUpStrict = (middleDeltaY < -0.04 && Math.abs(middleDeltaY) > middleDeltaX * 1.5);
-
-                    // 雙指交替檢核邏輯
-                    if (indexMovedUpStrict && stats.lastActiveFinger !== 'index') {
-                        stats.lastActiveFinger = 'index';
-                        stats.steps++;
-                    } else if (middleMovedUpStrict && stats.lastActiveFinger !== 'middle') {
-                        stats.lastActiveFinger = 'middle';
-                        stats.steps++;
+                    // 檢查中指狀態機
+                    if (middleTip.y < stats.baseY - 0.035) {
+                        if (stats.middleState === 'DOWN' && stats.lastActiveFinger !== 'middle') {
+                            stats.middleState = 'UP';
+                            stats.lastActiveFinger = 'middle';
+                            stats.steps++;
+                        }
+                    } 
+                    else if (middleTip.y > stats.baseY - 0.015) {
+                        stats.middleState = 'DOWN';
                     }
 
                     if (sideKey === 'left') scoreP1El.innerText = stats.steps;
                     else scoreP2El.innerText = stats.steps;
-
-                    // 記錄當前 X 與 Y 座標供下一影格比對
-                    stats.lastIndexX = indexTip.x;
-                    stats.lastIndexY = indexTip.y;
-                    stats.lastMiddleX = middleTip.x;
-                    stats.lastMiddleY = middleTip.y;
                 }
 
                 if (rawHands.length === 0) {
                     commandDisplay.innerText = "請將食指與中指伸入鏡頭跑步！";
                 } else {
-                    commandDisplay.innerText = `雙指嚴格交替跑步中 🏃‍♂️`;
+                    commandDisplay.innerText = `防作弊跑步中 🏃‍♂️`;
                 }
 
                 canvasCtx.restore();
