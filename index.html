@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>手指跑步競速（精簡判定點版）</title>
+    <title>手指跑步競速（嚴格防作弊版）</title>
     <style>
         :root {
             --bg-color: #0b0f19;          
@@ -249,10 +249,10 @@
         let webcamRunning = false;
         let lastVideoTime = -1;
 
-        // 紀錄左右兩側區域的雙指跑步狀態
+        // 紀錄左右兩側區域的雙指跑步狀態（包含 X 與 Y 座標供位移計算）
         const sideStats = {
-            left: { steps: 0, lastIndexY: 0, lastMiddleY: 0, lastActiveFinger: null },
-            right: { steps: 0, lastIndexY: 0, lastMiddleY: 0, lastActiveFinger: null }
+            left: { steps: 0, lastIndexX: 0, lastIndexY: 0, lastMiddleX: 0, lastMiddleY: 0, lastActiveFinger: null },
+            right: { steps: 0, lastIndexX: 0, lastIndexY: 0, lastMiddleX: 0, lastMiddleY: 0, lastActiveFinger: null }
         };
 
         const startBtn = document.getElementById('start-btn');
@@ -326,20 +326,18 @@
                 const w = canvasElement.width;
                 const h = canvasElement.height;
 
-                // 迴圈處理每一隻偵測到的手
                 for (let i = 0; i < rawHands.length; i++) {
                     const landmarks = rawHands[i];
-                    const wrist = landmarks[0];          // 手腕 (點 0) - 判定左右邊
-                    const indexTip = landmarks[8];       // 食指指尖 (點 8) - 跑步腳 1
-                    const middleTip = landmarks[12];     // 中指指尖 (點 12) - 跑步腳 2
+                    const wrist = landmarks[0];          
+                    const indexTip = landmarks[8];       
+                    const middleTip = landmarks[12];     
                     
-                    // 1. 繪製手腕追蹤點（顯示系統有抓到手）
+                    // 繪製判定點
                     canvasCtx.fillStyle = '#00f3ff';
                     canvasCtx.beginPath();
                     canvasCtx.arc(wrist.x * w, wrist.y * h, 6, 0, 2 * Math.PI);
                     canvasCtx.fill();
 
-                    // 2. 繪製食指與中指指尖（顯示核心跑步判定點）
                     canvasCtx.fillStyle = '#00ffcc';
                     [indexTip, middleTip].forEach(tip => {
                         canvasCtx.beginPath();
@@ -350,36 +348,45 @@
                         canvasCtx.stroke();
                     });
 
-                    // 左右分邊（畫面鏡像後，X >= 0.5 為右側，反之左側）
                     let sideKey = wrist.x >= 0.5 ? 'left' : 'right'; 
                     let stats = sideStats[sideKey];
 
-                    // 檢查食指或中指是否有往上抬起的動作
-                    let indexMovedUp = (indexTip.y - stats.lastIndexY < -0.025);
-                    let middleMovedUp = (middleTip.y - stats.lastMiddleY < -0.025);
+                    // 計算 X 軸與 Y 軸的位移量
+                    let indexDeltaY = indexTip.y - stats.lastIndexY;
+                    let indexDeltaX = Math.abs(indexTip.x - stats.lastIndexX);
+
+                    let middleDeltaY = middleTip.y - stats.lastMiddleY;
+                    let middleDeltaX = Math.abs(middleTip.x - stats.lastMiddleX);
+
+                    // 【嚴格防作弊條件】：
+                    // 1. Y 軸向上起伏必須夠大（門檻從 -0.025 提升至更嚴格的 -0.04）
+                    // 2. 必須排除水平干擾：垂直向上的位移量必須明顯大於水平位移量（indexDeltaY < -0.04 且 |indexDeltaY| > indexDeltaX * 1.5）
+                    let indexMovedUpStrict = (indexDeltaY < -0.04 && Math.abs(indexDeltaY) > indexDeltaX * 1.5);
+                    let middleMovedUpStrict = (middleDeltaY < -0.04 && Math.abs(middleDeltaY) > middleDeltaX * 1.5);
 
                     // 雙指交替檢核邏輯
-                    if (indexMovedUp && stats.lastActiveFinger !== 'index') {
+                    if (indexMovedUpStrict && stats.lastActiveFinger !== 'index') {
                         stats.lastActiveFinger = 'index';
                         stats.steps++;
-                    } else if (middleMovedUp && stats.lastActiveFinger !== 'middle') {
+                    } else if (middleMovedUpStrict && stats.lastActiveFinger !== 'middle') {
                         stats.lastActiveFinger = 'middle';
                         stats.steps++;
                     }
 
-                    // 更新畫面分數
                     if (sideKey === 'left') scoreP1El.innerText = stats.steps;
                     else scoreP2El.innerText = stats.steps;
 
-                    // 儲存當前座標供下一影格比對
+                    // 記錄當前 X 與 Y 座標供下一影格比對
+                    stats.lastIndexX = indexTip.x;
                     stats.lastIndexY = indexTip.y;
+                    stats.lastMiddleX = middleTip.x;
                     stats.lastMiddleY = middleTip.y;
                 }
 
                 if (rawHands.length === 0) {
-                    commandDisplay.innerText = "請把食指與中指伸入鏡頭跑步！";
+                    commandDisplay.innerText = "請將食指與中指伸入鏡頭跑步！";
                 } else {
-                    commandDisplay.innerText = `雙指交替跑步中 🏃‍♂️`;
+                    commandDisplay.innerText = `雙指嚴格交替跑步中 🏃‍♂️`;
                 }
 
                 canvasCtx.restore();
