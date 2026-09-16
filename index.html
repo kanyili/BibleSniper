@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>手指跑步競速（防橫移作弊升級版）</title>
+    <title>手指跑步競速（平滑防抖動版）</title>
     <style>
         :root {
             --bg-color: #0b0f19;          
@@ -213,7 +213,7 @@
     <div id="rotate-warning">
         <div class="icon">📱</div>
         <h2>請將手機轉為橫向</h2>
-        <p>本遊戲需使用橫向畫面進行手指跑步競速123</p>
+        <p>本遊戲需使用橫向畫面進行手指跑步競速</p>
     </div>
 
     <div id="game-container">
@@ -233,11 +233,11 @@
         </div>
 
         <div id="command-container">
-            <div id="command-display">請確實交替上下點擊跑步！</div>
+            <div id="command-display">請將食指與中指伸入鏡頭跑步</div>
         </div>
 
         <div id="overlay-screen" class="interactive">
-            <h1 class="game-title">手指跑步競速（防作弊升級版）</h1>
+            <h1 class="game-title">手指跑步競速</h1>
             <button class="btn-primary" id="start-btn" disabled>正在初始化手部模組...</button>
         </div>
     </div>
@@ -249,10 +249,10 @@
         let webcamRunning = false;
         let lastVideoTime = -1;
 
-        // 紀錄左右兩側區域的狀態機（加入 baseY 基準點與上下狀態判定）
+        // 紀錄左右兩側區域的狀態機與平滑後的座標
         const sideStats = {
-            left: { steps: 0, indexState: 'DOWN', middleState: 'DOWN', baseY: null, lastActiveFinger: null },
-            right: { steps: 0, indexState: 'DOWN', middleState: 'DOWN', baseY: null, lastActiveFinger: null }
+            left: { steps: 0, indexState: 'DOWN', middleState: 'DOWN', baseY: null, smoothIndexY: 0, smoothMiddleY: 0, lastActiveFinger: null },
+            right: { steps: 0, indexState: 'DOWN', middleState: 'DOWN', baseY: null, smoothIndexY: 0, smoothMiddleY: 0, lastActiveFinger: null }
         };
 
         const startBtn = document.getElementById('start-btn');
@@ -332,56 +332,64 @@
                     const indexTip = landmarks[8];       
                     const middleTip = landmarks[12];     
                     
-                    // 繪製判定點
+                    let sideKey = wrist.x >= 0.5 ? 'left' : 'right'; 
+                    let stats = sideStats[sideKey];
+
+                    // 【防飄動：低通濾波器 Low-pass Filter】
+                    // 將當前影格與上一影格的座標進行權重融合（0.6 新數據 + 0.4 舊數據），過濾掉 AI 抖動
+                    if (stats.smoothIndexY === 0) {
+                        stats.smoothIndexY = indexTip.y;
+                        stats.smoothMiddleY = middleTip.y;
+                    } else {
+                        stats.smoothIndexY = stats.smoothIndexY * 0.4 + indexTip.y * 0.6;
+                        stats.smoothMiddleY = stats.smoothMiddleY * 0.4 + middleTip.y * 0.6;
+                    }
+
+                    // 繪製平滑後的判定點（視覺上也會跟著穩定許多）
                     canvasCtx.fillStyle = '#00f3ff';
                     canvasCtx.beginPath();
                     canvasCtx.arc(wrist.x * w, wrist.y * h, 6, 0, 2 * Math.PI);
                     canvasCtx.fill();
 
                     canvasCtx.fillStyle = '#00ffcc';
-                    [indexTip, middleTip].forEach(tip => {
-                        canvasCtx.beginPath();
-                        canvasCtx.arc(tip.x * w, tip.y * h, 10, 0, 2 * Math.PI);
-                        canvasCtx.fill();
-                        canvasCtx.strokeStyle = '#ffffff';
-                        canvasCtx.lineWidth = 2;
-                        canvasCtx.stroke();
-                    });
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(indexTip.x * w, stats.smoothIndexY * h, 10, 0, 2 * Math.PI);
+                    canvasCtx.fill();
+                    canvasCtx.strokeStyle = '#ffffff';
+                    canvasCtx.lineWidth = 2;
+                    canvasCtx.stroke();
 
-                    let sideKey = wrist.x >= 0.5 ? 'left' : 'right'; 
-                    let stats = sideStats[sideKey];
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(middleTip.x * w, stats.smoothMiddleY * h, 10, 0, 2 * Math.PI);
+                    canvasCtx.fill();
+                    canvasCtx.stroke();
 
-                    // 初始化或用手腕位置動態跟隨計算基礎高度（適應手部遠近晃動）
+                    // 初始化或動態跟隨計算基準高度
                     if (stats.baseY === null) {
-                        stats.baseY = (indexTip.y + middleTip.y) / 2;
+                        stats.baseY = (stats.smoothIndexY + stats.smoothMiddleY) / 2;
                     } else {
-                        // 讓 baseY 平滑跟隨手部整體的平均高度
-                        stats.baseY = stats.baseY * 0.95 + ((indexTip.y + middleTip.y) / 2) * 0.05;
+                        stats.baseY = stats.baseY * 0.98 + ((stats.smoothIndexY + stats.smoothMiddleY) / 2) * 0.02;
                     }
 
-                    // 檢查食指狀態機
-                    // 當手指抬高超過基準線一定距離 (例如 -0.035)，且之前是 DOWN，才切換為 UP
-                    if (indexTip.y < stats.baseY - 0.035) {
+                    // 狀態機：食指判定（加入更嚴格的防抖區間）
+                    if (stats.smoothIndexY < stats.baseY - 0.04) {
                         if (stats.indexState === 'DOWN' && stats.lastActiveFinger !== 'index') {
                             stats.indexState = 'UP';
                             stats.lastActiveFinger = 'index';
                             stats.steps++;
                         }
-                    } 
-                    // 當手指放回低於基準線附近，重設為 DOWN 狀態以準備下一次抬起
-                    else if (indexTip.y > stats.baseY - 0.015) {
+                    } else if (stats.smoothIndexY > stats.baseY - 0.015) {
                         stats.indexState = 'DOWN';
                     }
 
-                    // 檢查中指狀態機
-                    if (middleTip.y < stats.baseY - 0.035) {
+                    // 狀態機：中指判定
+                    if (stats.smoothMiddleY < stats.baseY - 0.04) {
                         if (stats.middleState === 'DOWN' && stats.lastActiveFinger !== 'middle') {
                             stats.middleState = 'UP';
                             stats.lastActiveFinger = 'middle';
                             stats.steps++;
                         }
-                    } 
-                    else if (middleTip.y > stats.baseY - 0.015) {
+                    } else if (stats.smoothMiddleY > stats.baseY - 0.015) {
                         stats.middleState = 'DOWN';
                     }
 
@@ -392,7 +400,7 @@
                 if (rawHands.length === 0) {
                     commandDisplay.innerText = "請將食指與中指伸入鏡頭跑步！";
                 } else {
-                    commandDisplay.innerText = `防作弊跑步中 🏃‍♂️`;
+                    commandDisplay.innerText = `穩定跑步中 🏃‍♂️`;
                 }
 
                 canvasCtx.restore();
