@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>手指跑步競速（座標分邊版）</title>
+    <title>手指跑步競速（雙指交替版）</title>
     <style>
         :root {
             --bg-color: #0b0f19;          
@@ -233,11 +233,11 @@
         </div>
 
         <div id="command-container">
-            <div id="command-display">請將雙手伸入鏡頭</div>
+            <div id="command-display">請將雙指伸入鏡頭跑步</div>
         </div>
 
         <div id="overlay-screen" class="interactive">
-            <h1 class="game-title">手指跑步競速</h1>
+            <h1 class="game-title">手指跑步競速（雙指交替版）</h1>
             <button class="btn-primary" id="start-btn" disabled>正在初始化手部模組...</button>
         </div>
     </div>
@@ -249,10 +249,10 @@
         let webcamRunning = false;
         let lastVideoTime = -1;
 
-        // 紀錄左右兩側區域的步數與狀態
+        // 紀錄左右兩側區域的雙指跑步狀態
         const sideStats = {
-            left: { steps: 0, lastY: 0, movingUp: false },
-            right: { steps: 0, lastY: 0, movingUp: false }
+            left: { steps: 0, lastIndexY: 0, lastMiddleY: 0, lastActiveFinger: null },
+            right: { steps: 0, lastIndexY: 0, lastMiddleY: 0, lastActiveFinger: null }
         };
 
         const startBtn = document.getElementById('start-btn');
@@ -332,31 +332,40 @@
 
                 for (let i = 0; i < rawHands.length; i++) {
                     const landmarks = rawHands[i];
-                    const indexFingerTip = landmarks[8]; // 食指指尖
                     const wrist = landmarks[0];          // 手腕中心點 X 座標
+                    const indexTip = landmarks[8];       // 食指指尖 (點 8)
+                    const middleTip = landmarks[12];     // 中指指尖 (點 12)
                     
-                    // 【關鍵修改】純粹依據手腕的 X 座標分邊（畫面經過鏡像翻轉，X >= 0.5 視為畫面右側，反之左側）
+                    // 以畫面 X 座標分邊（畫面鏡像後，X >= 0.5 為右側，反之左側）
                     let sideKey = wrist.x >= 0.5 ? 'left' : 'right'; 
-
-                    let currentY = indexFingerTip.y;
                     let stats = sideStats[sideKey];
 
-                    // 簡易計步邏輯：食指上下晃動
-                    if (currentY - stats.lastY < -0.03 && !stats.movingUp) {
-                        stats.movingUp = true;
+                    // 檢查食指或中指是否有往上抬起的動作（波峰偵測）
+                    let indexMovedUp = (indexTip.y - stats.lastIndexY < -0.025);
+                    let middleMovedUp = (middleTip.y - stats.lastMiddleY < -0.025);
+
+                    // 雙指交替檢核邏輯：必須輪流抬起（不能連續用同一根手指作弊）
+                    if (indexMovedUp && stats.lastActiveFinger !== 'index') {
+                        stats.lastActiveFinger = 'index';
                         stats.steps++;
-                        if (sideKey === 'left') scoreP1El.innerText = stats.steps;
-                        else scoreP2El.innerText = stats.steps;
-                    } else if (currentY - stats.lastY > 0.03) {
-                        stats.movingUp = false;
+                    } else if (middleMovedUp && stats.lastActiveFinger !== 'middle') {
+                        stats.lastActiveFinger = 'middle';
+                        stats.steps++;
                     }
-                    stats.lastY = currentY;
+
+                    // 更新畫面分數
+                    if (sideKey === 'left') scoreP1El.innerText = stats.steps;
+                    else scoreP2El.innerText = stats.steps;
+
+                    // 儲存當前座標供下一影格比對
+                    stats.lastIndexY = indexTip.y;
+                    stats.lastMiddleY = middleTip.y;
                 }
 
                 if (rawHands.length === 0) {
-                    commandDisplay.innerText = "請把手指伸入鏡頭跑步！";
+                    commandDisplay.innerText = "請把食指與中指伸入鏡頭跑步！";
                 } else {
-                    commandDisplay.innerText = `正在進行手指賽跑 🏃‍♂️`;
+                    commandDisplay.innerText = `雙指交替跑步中 🏃‍♂️`;
                 }
 
                 canvasCtx.restore();
