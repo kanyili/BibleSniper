@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mediapipe 站直手放下偵測</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;          
+            --primary-color: #00f3ff;     
+            --success-color: #00ffcc;     
+            --text-color: #ffffff;        
+            --border-glow: rgba(0, 243, 255, 0.2); 
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        #rotate-warning {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(11, 15, 25, 0.95);
+            z-index: 9999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #rotate-warning .icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            animation: rotatePhone 2s infinite ease-in-out;
+        }
+
+        @keyframes rotatePhone {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(90deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        @media screen and (orientation: portrait) {
+            #rotate-warning {
+                display: flex;
+            }
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+
+        #webcam-video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            z-index: 1;
+        }
+
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            transform: scaleX(-1);
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            pointer-events: none;
+            box-sizing: border-box;
+            padding: 10px 20px 16px 20px;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        .player-zone {
+            width: 48%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 15px;
+            position: relative;
+            border: 2px dashed var(--border-glow);
+            box-sizing: border-box;
+            transition: border-color 0.3s ease;
+        }
+
+        .player-zone.ready {
+            border-color: var(--success-color);
+            box-shadow: inset 0 0 15px rgba(0, 255, 204, 0.3);
+        }
+
+        .player-header {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--primary-color);
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+            margin-bottom: 10px;
+        }
+
+        #command-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            text-align: center;
+            pointer-events: none;
+            border-radius: 12px;
+            border: 1px solid var(--border-glow);
+        }
+
+        #command-display {
+            font-size: 2rem;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: 2px;
+        }
+
+        #overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            background: rgba(11, 15, 25, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.3s ease;
+            padding: 20px;
+        }
+
+        .game-title {
+            font-size: 2.2rem;
+            font-weight: 900;
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            text-shadow: 0 0 15px rgba(0, 243, 255, 0.6);
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), #0066ff);
+            color: var(--text-color);
+            border: none;
+            padding: 15px 30px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            background: #2a3b4c;
+            color: #ff8080;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="rotate-warning">
+        <div class="icon">📱</div>
+        <h2>請將手機轉為橫向</h2>
+        <p>本系統需使用橫向畫面進行動作捕捉</p>
+    </div>
+
+    <div id="game-container">
+        <video id="webcam-video" autoplay playsinline muted></video>
+        <canvas id="game-canvas"></canvas>
+
+        <div id="ui-layer">
+            <div class="player-zone" id="zone-p1">
+                <div class="player-header">PLAYER 1</div>
+            </div>
+
+            <div class="player-zone" id="zone-p2">
+                <div class="player-header">PLAYER 2</div>
+            </div>
+        </div>
+
+        <div id="command-container">
+            <div id="command-display">初始化中...</div>
+        </div>
+
+        <div id="overlay-screen" class="interactive">
+            <h1 class="game-title">站直與手放下偵測測試</h1>
+            <button class="btn-primary" id="start-btn" disabled>正在初始化模組...</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { PoseLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/vision_bundle.mjs";
+
+        const CONFIG = {
+            detection: {
+                visibilityThreshold: 0.3,      
+                handDownTolerance: 0.05     
+            },
+
+            isLandmarkPositionValid: function(l, index) {
+                if (!l || !l[index]) return false;
+                const pt = l[index];
+                return Number.isFinite(pt.x) && Number.isFinite(pt.y) &&
+                       pt.x >= -0.08 && pt.x <= 1.08 &&
+                       pt.y >= -0.08 && pt.y <= 1.08;
+            },
+
+            isLandmarkReliable: function(l, index, threshold = CONFIG.detection.visibilityThreshold) {
+                if (!CONFIG.isLandmarkPositionValid(l, index)) return false;
+                const vis = l[index].visibility ?? 1.0;
+                return vis >= threshold;
+            },
+
+            isBodyInFrame: function(l) {
+                if (!l) return false;
+                const valid = (idx) => CONFIG.isLandmarkPositionValid(l, idx);
+                const hasShoulders = valid(11) && valid(12);
+                const hasHips = valid(23) && valid(24);
+                return hasShoulders && hasHips;
+            },
+            
+            neutralCheck: function(l) {
+                const tolerance = CONFIG.detection.handDownTolerance;
+                const isVisible = CONFIG.isLandmarkPositionValid(l, 11) && CONFIG.isLandmarkPositionValid(l, 12) && 
+                                  CONFIG.isLandmarkPositionValid(l, 23) && CONFIG.isLandmarkPositionValid(l, 24);   
+
+                if (!isVisible) return false;
+                
+                const leftWristReliable = CONFIG.isLandmarkReliable(l, 15);
+                const rightWristReliable = CONFIG.isLandmarkReliable(l, 16);
+                const leftHandsDown = !leftWristReliable || (l[15].y >= l[11].y - tolerance);
+                const rightHandsDown = !rightWristReliable || (l[16].y >= l[12].y - tolerance);
+
+                return leftHandsDown && rightHandsDown;
+            }
+        };
+
+        const playerState = {
+            p1: { lastCenterX: 0.75 },
+            p2: { lastCenterX: 0.25 }
+        };
+
+        let poseLandmarker = undefined;
+        let webcamRunning = false;
+        let lastVideoTime = -1;
+        let latestPosesSnapshot = []; 
+
+        const startBtn = document.getElementById('start-btn');
+        const overlayScreen = document.getElementById('overlay-screen');
+        const webcamVideo = document.getElementById('webcam-video');
+        const canvasElement = document.getElementById('game-canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const drawingUtils = new DrawingUtils(canvasCtx);
+
+        const commandDisplay = document.getElementById('command-display');
+        const zoneP1 = document.getElementById('zone-p1');
+        const zoneP2 = document.getElementById('zone-p2');
+
+        async function preloadModel() {
+            try {
+                startBtn.innerText = "正在載入 WASM...";
+                const visionFilesetResolver = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm"
+                );
+                startBtn.innerText = "正在載入 AI 模型...";
+                poseLandmarker = await PoseLandmarker.createFromOptions(visionFilesetResolver, {
+                    baseOptions: {
+                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+                        delegate: "GPU"
+                    },
+                    runningMode: "VIDEO",
+                    numPoses: 2
+                });
+                startBtn.disabled = false;
+                startBtn.innerText = "開始測試";
+            } catch (err) {
+                startBtn.innerText = "錯誤: " + err.message;
+            }
+        }
+
+        preloadModel();
+
+        startBtn.addEventListener('click', async () => {
+            if (!poseLandmarker) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false
+                });
+                webcamVideo.srcObject = stream;
+                webcamVideo.addEventListener('loadeddata', () => {
+                    webcamRunning = true;
+                    overlayScreen.style.opacity = '0';
+                    setTimeout(() => overlayScreen.style.display = 'none', 300);
+                    requestAnimationFrame(predictWebcam);
+                });
+            } catch (err) {
+                alert('無法啟用攝影機');
+            }
+        });
+
+        function updatePlayerTracking(poses) {
+            let validPoses = [];
+
+            for (const pose of poses) {
+                if (!pose || !pose[23] || !pose[24]) continue;
+                if (!CONFIG.isLandmarkPositionValid(pose, 23) || !CONFIG.isLandmarkPositionValid(pose, 24)) continue;
+                const centerX = (pose[23].x + pose[24].x) / 2;
+                validPoses.push({ pose, centerX });
+            }
+
+            if (validPoses.length === 0) {
+                return { p1Landmarks: null, p2Landmarks: null };
+            }
+
+            let p1Landmarks = null;
+            let p2Landmarks = null;
+            const maxTrackingDist = 0.30;
+
+            if (validPoses.length === 1) {
+                const item = validPoses[0];
+                const distToP1 = Math.abs(item.centerX - playerState.p1.lastCenterX);
+                const distToP2 = Math.abs(item.centerX - playerState.p2.lastCenterX);
+                
+                if (distToP1 <= distToP2 && distToP1 <= maxTrackingDist) {
+                    p1Landmarks = item.pose;
+                    playerState.p1.lastCenterX = item.centerX;
+                } else if (distToP2 < distToP1 && distToP2 <= maxTrackingDist) {
+                    p2Landmarks = item.pose;
+                    playerState.p2.lastCenterX = item.centerX;
+                } else {
+                    if (item.centerX >= 0.5) {
+                        p1Landmarks = item.pose;
+                        playerState.p1.lastCenterX = item.centerX;
+                    } else {
+                        p2Landmarks = item.pose;
+                        playerState.p2.lastCenterX = item.centerX;
+                    }
+                }
+            } else {
+                validPoses.sort((a, b) => a.centerX - b.centerX);
+                const pA = validPoses[0]; 
+                const pB = validPoses[1]; 
+
+                p1Landmarks = pB.pose;
+                p2Landmarks = pA.pose;
+                playerState.p1.lastCenterX = pB.centerX;
+                playerState.p2.lastCenterX = pA.centerX;
+            }
+
+            return { p1Landmarks, p2Landmarks };
+        }
+
+        async function predictWebcam() {
+            if (canvasElement.width !== webcamVideo.videoWidth || canvasElement.height !== webcamVideo.videoHeight) {
+                canvasElement.width = webcamVideo.videoWidth;
+                canvasElement.height = webcamVideo.videoHeight;
+            }
+
+            let startTimeMs = performance.now();
+            if (lastVideoTime !== webcamVideo.currentTime) {
+                lastVideoTime = webcamVideo.currentTime;
+                const poseResult = poseLandmarker.detectForVideo(webcamVideo, startTimeMs);
+
+                canvasCtx.save();
+                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+                let rawPoses = poseResult.landmarks || [];
+                latestPosesSnapshot = rawPoses; 
+
+                for (const landmarks of rawPoses) {
+                    drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#00F3FF', lineWidth: 3 });
+                    drawingUtils.drawLandmarks(landmarks, { color: '#FF0055', radius: 4 });
+                }
+
+                const { p1Landmarks, p2Landmarks } = updatePlayerTracking(rawPoses);
+
+                const p1InFrame = p1Landmarks && CONFIG.isBodyInFrame(p1Landmarks);
+                const p2InFrame = p2Landmarks && CONFIG.isBodyInFrame(p2Landmarks);
+
+                let p1Ready = p1Landmarks && p1InFrame && CONFIG.neutralCheck(p1Landmarks);
+                let p2Ready = p2Landmarks && p2InFrame && CONFIG.neutralCheck(p2Landmarks);
+
+                // 更新 P1 邊框提示
+                if (p1Ready) {
+                    zoneP1.classList.add('ready');
+                } else {
+                    zoneP1.classList.remove('ready');
+                }
+
+                // 更新 P2 邊框提示
+                if (p2Ready) {
+                    zoneP2.classList.add('ready');
+                } else {
+                    zoneP2.classList.remove('ready');
+                }
+
+                // 畫面中央文字提示狀態
+                if (!p1Landmarks || !p2Landmarks) {
+                    commandDisplay.innerText = "兩位玩家入鏡";
+                } else if (!p1Ready || !p2Ready) {
+                    commandDisplay.innerText = "站直、手放下";
+                } else {
+                    commandDisplay.innerText = "兩位玩家準備就緒！";
+                }
+
+                canvasCtx.restore();
+            }
+
+            if (webcamRunning) {
+                requestAnimationFrame(predictWebcam);
+            }
+        }
+    </script>
+</body>
+</html>
