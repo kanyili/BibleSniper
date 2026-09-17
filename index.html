@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BibleSniper - 聖經來找碴</title>
+    <title>聖經來找碴</title>
     <style>
         /* 全局設定：確保滿版、無捲軸 */
         * {
@@ -371,57 +371,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* ─── 手機直向警告遮罩 (請橫放螢幕) ─── */
-        #rotate-warning {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background-color: rgba(15, 23, 42, 0.95);
-            z-index: 99999;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            padding: 24px;
-            color: #ffffff;
-        }
-
-        .rotate-card {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 16px;
-            max-width: 320px;
-        }
-
-        .rotate-anim-icon {
-            font-size: 4rem;
-            animation: phoneRotate 2s infinite ease-in-out;
-        }
-
-        @keyframes phoneRotate {
-            0% { transform: rotate(0deg); }
-            50% { transform: rotate(90deg); }
-            100% { transform: rotate(0deg); }
-        }
-
-        #rotate-warning h2 {
-            font-size: 1.6rem;
-            color: #4cc9f0;
-        }
-
-        #rotate-warning p {
-            font-size: 1rem;
-            color: #e2e8f0;
-            line-height: 1.6;
-        }
-
-        /* 當手機處於直向 (Portrait) 且寬度小於 900px 時自動顯示警告 */
-        @media screen and (max-width: 900px) and (orientation: portrait) {
-            #rotate-warning {
-                display: flex;
-            }
-        }
-
         /* 煙火畫布特效層 */
         #fireworks-canvas {
             position: absolute;
@@ -435,15 +384,6 @@
     </style>
 </head>
 <body>
-
-    <!-- 手機橫放提示遮罩 -->
-    <div id="rotate-warning">
-        <div class="rotate-card">
-            <div class="rotate-anim-icon">📱🔄</div>
-            <h2>請將手機橫向放置</h2>
-            <p>為了獲得最佳的 <b>BibleSniper</b> 狙擊體驗與清晰畫面，請將您的手機轉為橫向螢幕遊玩！</p>
-        </div>
-    </div>
 
     <!-- 煙火特效 Canvas -->
     <canvas id="fireworks-canvas"></canvas>
@@ -493,7 +433,7 @@
         ];
 
         const originalNtData = [
-            [["太", "ㄊㄞˋ"], ["可", "ㄎㄜˇ"], ["路", "ㄌㄨˋ"], ["約", "ㄩㄝ"], ["徒", "ㄊㄨˊ"], null, ["羅", "ㄌㄨㄛˊ"], ["林", "lㄧㄣˊ"], ["林", "ㄌㄧㄣˊ"], ["加", "ㄐㄧㄚ"], ["弗", "ㄈㄨˊ"]],
+            [["太", "ㄊㄞˋ"], ["可", "ㄎㄜˇ"], ["路", "ㄌㄨˋ"], ["約", "ㄩㄝ"], ["徒", "ㄊㄨˊ"], null, ["羅", "ㄌㄨㄛˊ"], ["林", "ㄌㄧㄣˊ"], ["林", "ㄌㄧㄣˊ"], ["加", "ㄐㄧㄚ"], ["弗", "ㄈㄨˊ"]],
             [["腓", "ㄈㄟˊ"], ["西", "ㄒㄧ"], ["帖", "ㄊㄧㄝˇ"], ["帖", "ㄊㄧㄝˇ"], ["提", "ㄊㄧˊ"], null , ["提", "ㄊㄧˊ"], ["多", "ㄉㄨㄛ"], ["門", "ㄇㄣˊ"], ["來", "ㄌㄞˊ"], ["雅", "ㄧㄚˇ"]],
             [["彼", "ㄅㄧˇ"], ["彼", "ㄅㄧˇ"], ["約", "ㄩㄝ"], ["約", "ㄩㄝ"], ["約", "ㄩㄝ"], null , ["猶", "ㄧㄡˊ"], null, ["啟", "ㄑㄧˇ"], null, null]
         ];
