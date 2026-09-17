@@ -1,415 +1,909 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>手指跑步競速（平滑防抖動版）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聖經來找碴</title>
     <style>
-        :root {
-            --bg-color: #0b0f19;          
-            --primary-color: #00f3ff;     
-            --success-color: #00ffcc;     
-            --text-color: #ffffff;        
-            --border-glow: rgba(0, 243, 255, 0.2); 
-        }
-
+        /* 全局設定：確保滿版、無捲軸 */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            user-select: none;
+            font-family: "Microsoft JhengHei", "DFKai-SB", "BiauKai", sans-serif;
         }
-
-        body, html {
-            width: 100%;
+        html, body {
+            width: 100vw;
             height: 100vh;
-            height: 100dvh;
-            overflow: hidden;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            overflow: hidden; /* 嚴格禁止捲軸 */
+            background-color: #f7f9fc; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0.5vh 1vw;
+            position: relative;
+            transition: background-color 1.5s ease; /* 背景切換時的平滑過渡 */
         }
 
-        #rotate-warning {
-            display: none;
+        /* 完全正確時的藍天白雲模式 */
+        body.sky-mode {
+            background-color: #87ceeb;
+        }
+
+        body::before {
+            content: "";
             position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 100px 40px at 15% 25%, rgba(255,255,255,0.85), transparent 70%),
+                radial-gradient(ellipse 140px 50px at 23% 25%, rgba(255,255,255,0.85), transparent 70%),
+                radial-gradient(ellipse 110px 40px at 75% 18%, rgba(255,255,255,0.85), transparent 70%),
+                radial-gradient(ellipse 150px 50px at 83% 18%, rgba(255,255,255,0.85), transparent 70%),
+                linear-gradient(
+                    to bottom,
+                    #1da1f2 0%,
+                    #4fc3f7 40%,
+                    #87ceeb 70%,
+                    #dff6ff 100%
+                );
+            opacity: 0;
+            transition: opacity 1.5s ease;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body.sky-mode::before {
+            opacity: 1;
+        }
+
+        /* 外部大框架：左側放按鈕與說明，右側放遊戲區塊 */
+        .game-layout {
+            display: flex;
+            flex-direction: row;
+            gap: 1.5vw;
+            align-items: flex-start;
+            max-width: 1300px;
+            width: 100%;
+            padding-top: 1vh;
+            z-index: 10; /* 確保在煙火上方 */
+        }
+
+        /* 左側按鈕與解析面板區 */
+        .sidebar-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5vh;
+            min-width: 150px;
+            max-width: 180px;
+        }
+
+        .sidebar-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5vh;
+        }
+
+        .game-btn {
+            background-color: #ffffff;
+            color: #0077b6;
+            border: 2px solid #00b4d8;
+            padding: 1.2vh 1vw;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+
+        .game-btn:hover {
+            background-color: #e0fbfc;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0,180,216,0.2);
+        }
+
+        .game-btn:active {
+            transform: translateY(0);
+        }
+
+        /* 解答按鈕預設隱藏，只有在錯誤版模式才顯示 */
+        #btn-answer {
+            display: none;
+            background-color: #caf0f8;
+            border-color: #0077b6;
+            color: #03045e;
+        }
+
+        /* 解答按鈕下方的詳細說明面板 */
+        #answer-panel {
+            display: none;
+            background-color: #ffffff;
+            border: 2px solid #00b4d8;
+            border-radius: 10px;
+            padding: 1vh 0.8vw;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            font-size: 0.85rem;
+            color: #2b2d42;
+            max-height: 50vh;
+            overflow-y: auto;
+        }
+
+        #answer-panel h4 {
+            color: #0077b6;
+            margin-bottom: 6px;
+            font-size: 0.95rem;
+            text-align: center;
+            border-bottom: 1px dashed #b0e0e6;
+            padding-bottom: 4px;
+        }
+
+        .answer-item {
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #f0f4f8;
+        }
+
+        .answer-coord {
+            font-weight: bold;
+            color: #d90429;
+            margin-bottom: 2px;
+        }
+
+        /* 主容器：加入淡入淡出轉場效果 */
+        .main-container {
+            width: 100%;
+            max-width: 1100px;
+            display: flex;
+            flex-direction: column;
+            gap: 1vh; 
+            opacity: 1;
+            transition: opacity 0.3s ease-in-out; /* 轉場速度控制 */
+        }
+
+        /* 獨立的區塊容器 */
+        .bible-card-box {
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+            padding: 0.8vh 1vw 1vh 1vw;
+            border-radius: 12px;
+            border: 2px solid #e1e8ed;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            gap: 0.4vh;
+        }
+
+        /* 上方英代號列 (A~K) */
+        .col-header {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            padding-left: 2.5vw; 
+            margin-bottom: 2px;
+        }
+        .col-label {
+            width: 5.2vw;
+            min-width: 50px;
+            max-width: 70px;
+            text-align: center;
+            color: #00b4d8;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        /* 每一列的包裝 */
+        .row-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        /* 左側數字列 */
+        .row-label {
+            width: 2.2vw;
+            min-width: 24px;
+            text-align: right;
+            padding-right: 6px;
+            color: #00b4d8;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .bible-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4vh;
+        }
+        .row {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        /* 單一字的容器 */
+        .bopomofo-card {
+            background-color: #ffffff; 
+            border: 2px solid #dcdcdc;  
+            border-radius: 8px;
+            width: 5.2vw; 
+            height: 5.2vw;
+            min-width: 50px; 
+            min-height: 50px;
+            max-width: 70px;
+            max-height: 70px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center; 
+            justify-content: center; 
+            position: relative;
+        }
+
+        /* 玩家點擊選擇中的紅底色 */
+        .bopomofo-card.selected {
+            background-color: #ffb7b2 !important;
+            border-color: #d90429 !important;
+        }
+        .bopomofo-card.selected .char {
+            color: #d90429 !important;
+        }
+
+        /* 完全正確後的白黃色持續閃爍特效 */
+        @keyframes whiteYellowFlash {
+            0% { background-color: #ffffff; border-color: #ffe600; }
+            50% { background-color: #fffacd; border-color: #ffd700; transform: scale(1.05); }
+            100% { background-color: #ffffff; border-color: #ffe600; }
+        }
+
+        .bopomofo-card.success-flash {
+            animation: whiteYellowFlash 1s infinite;
+            z-index: 5;
+        }
+        .bopomofo-card.success-flash .char {
+            color: #d4a373 !important;
+        }
+
+        /* 點擊「解答」後的藍色標示特效 */
+        .bopomofo-card.answer-highlight {
+            background-color: #e0fbfc !important;
+            border-color: #0077b6 !important;
+            box-shadow: 0 0 10px rgba(0, 119, 182, 0.4);
+        }
+        .bopomofo-card.answer-highlight .char {
+            color: #0077b6 !important;
+        }
+
+        /* 空白佔位格 */
+        .bopomofo-card.empty {
+            border: none;
+            background: transparent;
+            cursor: default;
+            pointer-events: none;
+        }
+        .bopomofo-card:hover:not(.empty):not(.selected):not(.success-flash):not(.answer-highlight) {
+            background-color: #e0fbfc; 
+            border-color: #00b4d8;
+            transform: scale(1.06); 
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 180, 216, 0.2);
+        }
+        
+        /* 國字＋注音的配置 */
+        .content-wrapper {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            width: 90%;
+            height: 90%;
+            gap: 2px;
+        }
+
+        /* 國字 */
+        .char {
+            font-size: 1.50rem;
+            color: #2b2d42;
+            font-weight: bold;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 課本式注音容器 */
+        .bopomofo-text {
+            position: relative;
+            width: 16px;
+            height: 100%;
+            color: #d90429;
+            font-size: 0.60rem;
+            line-height: 1;
+        }
+
+        /* 每個注音符號精準定位 */
+        .bpm {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            text-align: center;
+        }
+
+        .bpm-1-0 { top: 28%; }
+        .bpm-2-0 { top: 15%; }
+        .bpm-2-1 { top: 48%; }
+        .bpm-3-0 { top: 4%; }
+        .bpm-3-1 { top: 30%; }
+        .bpm-3-2 { top: 56%; }
+
+        .bpm.tone {
+            top: 50%;
+            left: 8px;
+            font-size: 0.55rem;
+        }
+
+        /* 遊戲提示訊息列 */
+        #game-message {
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #3d5a80;
+            height: 25px;
+        }
+
+        /* 畫面左下角的計時器樣式（支援多位數毫秒） */
+        #game-timer {
+            position: fixed;
+            bottom: 2vh;
+            left: 1.5vw;
+            background-color: #ffffff;
+            color: #0077b6;
+            border: 2px solid #00b4d8;
+            padding: 8px 14px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+            display: none; /* 預設隱藏 */
+            z-index: 100;
+            font-variant-numeric: tabular-nums; /* 確保數字等寬，跳動不晃動 */
+            letter-spacing: 0.5px;
+        }
+
+        /* 煙火畫布特效層 */
+        #fireworks-canvas {
+            position: absolute;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            background-color: rgba(11, 15, 25, 0.95);
-            z-index: 9999;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            padding: 20px;
-        }
-
-        #rotate-warning .icon {
-            font-size: 48px;
-            margin-bottom: 20px;
-            animation: rotatePhone 2s infinite ease-in-out;
-        }
-
-        @keyframes rotatePhone {
-            0% { transform: rotate(0deg); }
-            50% { transform: rotate(90deg); }
-            100% { transform: rotate(0deg); }
-        }
-
-        @media screen and (orientation: portrait) {
-            #rotate-warning {
-                display: flex;
-            }
-        }
-
-        #game-container {
-            position: relative;
-            width: 100%;
-            height: 100vh;
-            height: 100dvh;
-            overflow: hidden;
-            box-sizing: border-box;
-        }
-
-        #webcam-video {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1);
-            z-index: 1;
-        }
-
-        #game-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-            pointer-events: none;
-            transform: scaleX(-1);
-        }
-
-        #ui-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 3;
-            display: flex;
-            flex-direction: row;
-            justify-content: space-between;
-            pointer-events: none;
-            box-sizing: border-box;
-            padding: 10px 20px 16px 20px;
-        }
-
-        .interactive {
-            pointer-events: auto;
-        }
-
-        .player-zone {
-            width: 48%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: center;
-            padding: 15px;
-            position: relative;
-            border: 2px dashed var(--border-glow);
-            box-sizing: border-box;
-        }
-
-        .player-header {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: var(--primary-color);
-            text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
-            margin-bottom: 5px;
-        }
-
-        .step-count {
-            font-size: 2.5rem;
-            font-weight: 900;
-            color: var(--success-color);
-            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
-        }
-
-        #command-container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            pointer-events: none; /* 讓滑鼠點擊穿透 */
             z-index: 5;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 15px 30px;
-            text-align: center;
-            pointer-events: none;
-            border-radius: 12px;
-            border: 1px solid var(--border-glow);
-        }
-
-        #command-display {
-            font-size: 1.8rem;
-            font-weight: 900;
-            color: #ffffff;
-            letter-spacing: 2px;
-        }
-
-        #overlay-screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10;
-            background: rgba(11, 15, 25, 0.85);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            transition: opacity 0.3s ease;
-            padding: 20px;
-        }
-
-        .game-title {
-            font-size: 2.2rem;
-            font-weight: 900;
-            color: var(--primary-color);
-            margin-bottom: 20px;
-            text-shadow: 0 0 15px rgba(0, 243, 255, 0.6);
-            text-align: center;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color), #0066ff);
-            color: var(--text-color);
-            border: none;
-            padding: 15px 30px;
-            font-size: 1rem;
-            font-weight: bold;
-            border-radius: 30px;
-            cursor: pointer;
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
-        }
-        
-        .btn-primary:disabled {
-            background: #2a3b4c;
-            color: #ff8080;
-            box-shadow: none;
-            cursor: not-allowed;
         }
     </style>
 </head>
 <body>
 
-    <div id="rotate-warning">
-        <div class="icon">📱</div>
-        <h2>請將手機轉為橫向</h2>
-        <p>本遊戲需使用橫向畫面進行手指跑步競速</p>
-    </div>
+    <!-- 煙火特效 Canvas -->
+    <canvas id="fireworks-canvas"></canvas>
 
-    <div id="game-container">
-        <video id="webcam-video" autoplay playsinline muted></video>
-        <canvas id="game-canvas"></canvas>
+    <!-- 左下角高精度計時器 -->
+    <div id="game-timer">⏱️ 00:00.00</div>
 
-        <div id="ui-layer">
-            <div class="player-zone" id="zone-p1">
-                <div class="player-header">左側區域步數</div>
-                <div class="step-count" id="score-p1">0</div>
+    <div class="game-layout">
+        <!-- 左側直排按鈕列與解答說明區 -->
+        <div class="sidebar-panel">
+            <div class="sidebar-buttons">
+                <button class="game-btn" onclick="setMode('correct')">正確版</button>
+                <button class="game-btn" onclick="setMode('wrong')">錯誤版</button>
+                <button class="game-btn" id="btn-answer" onclick="showAnswer()">解答</button>
+            </div>
+            <!-- 解答按鈕下方的詳細解析面板 -->
+            <div id="answer-panel">
+                <h4>答案對照</h4>
+                <div id="answer-content"></div>
+            </div>
+        </div>
+
+        <!-- 右側主要內容區 -->
+        <div class="main-container" id="game-main-container">
+            <div id="game-message">點擊左側「錯誤版」按鈕，進行挑戰！</div>
+
+            <!-- 舊約獨立區塊 -->
+            <div class="bible-card-box">
+                <div class="col-header" id="ot-col-header"></div>
+                <div class="bible-section" id="ot-box"></div>
             </div>
 
-            <div class="player-zone" id="zone-p2">
-                <div class="player-header">右側區域步數</div>
-                <div class="step-count" id="score-p2">0</div>
+            <!-- 新約獨立區塊 -->
+            <div class="bible-card-box">
+                <div class="col-header" id="nt-col-header"></div>
+                <div class="bible-section" id="nt-box"></div>
             </div>
-        </div>
-
-        <div id="command-container">
-            <div id="command-display">請將食指與中指伸入鏡頭跑步</div>
-        </div>
-
-        <div id="overlay-screen" class="interactive">
-            <h1 class="game-title">手指跑步競速</h1>
-            <button class="btn-primary" id="start-btn" disabled>正在初始化手部模組...</button>
         </div>
     </div>
 
-    <script type="module">
-        import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/vision_bundle.mjs";
+    <script>
+        const originalOtData = [
+            [["創", "ㄔㄨㄤˋ"], ["出", "ㄔㄨ"], ["利", "ㄌㄧˋ"], ["民", "ㄇㄧㄣˊ"], ["申", "ㄕㄣ"], null, ["書", "ㄕㄨ"], ["士", "ㄕˋ"], ["得", "ㄉㄜˊ"], ["撒", "ㄙㄚˋ"], ["撒", "ㄙㄚˋ"]],
+            [["王", "ㄨㄤˊ"], ["王", "ㄨㄤˊ"], ["代", "ㄉㄞˋ"], ["代", "ㄉㄞˋ"], ["拉", "ㄌㄚ"], null, ["尼", "ㄋㄧˊ"], ["斯", "ㄙ"], ["伯", "ㄅㄛˊ"], ["詩", "ㄕ"], ["箴", "ㄓㄣ"]],
+            [["傳", "ㄔㄨㄢˊ"], ["歌", "ㄍㄜ"], ["賽", "ㄙㄞˋ"], ["耶", "ㄧㄝˊ"], ["哀", "ㄞ"], null, ["結", "ㄐㄧㄝˊ"], ["但", "ㄉㄢˋ"], ["何", "ㄏㄜˊ"], ["珥", "ㄦˇ"], ["摩", "ㄇㄛˊ"]],
+            [["俄", "ㄜˊ"], ["拿", "ㄋㄚˊ"], ["彌", "ㄇㄧˊ"], null, ["鴻", "ㄏㄨㄥˊ"], ["哈", "ㄏㄚ"], ["番", "ㄈㄢ"], null, ["該", "ㄍㄞ"], ["亞", "ㄧㄚˇ"], ["瑪", "ㄇㄚˇ"]]
+        ];
 
-        let handLandmarker = undefined;
-        let webcamRunning = false;
-        let lastVideoTime = -1;
+        const originalNtData = [
+            [["太", "ㄊㄞˋ"], ["可", "ㄎㄜˇ"], ["路", "ㄌㄨˋ"], ["約", "ㄩㄝ"], ["徒", "ㄊㄨˊ"], null, ["羅", "ㄌㄨㄛˊ"], ["林", "ㄌㄧㄣˊ"], ["林", "ㄌㄧㄣˊ"], ["加", "ㄐㄧㄚ"], ["弗", "ㄈㄨˊ"]],
+            [["腓", "ㄈㄟˊ"], ["西", "ㄒㄧ"], ["帖", "ㄊㄧㄝˇ"], ["帖", "ㄊㄧㄝˇ"], ["提", "ㄊㄧˊ"], null , ["提", "ㄊㄧˊ"], ["多", "ㄉㄨㄛ"], ["門", "ㄇㄣˊ"], ["來", "ㄌㄞˊ"], ["雅", "ㄧㄚˇ"]],
+            [["彼", "ㄅㄧˇ"], ["彼", "ㄅㄧˇ"], ["約", "ㄩㄝ"], ["約", "ㄩㄝ"], ["約", "ㄩㄝ"], null , ["猶", "ㄧㄡˊ"], null, ["啟", "ㄑㄧˇ"], null, null]
+        ];
 
-        // 紀錄左右兩側區域的狀態機與平滑後的座標
-        const sideStats = {
-            left: { steps: 0, indexState: 'DOWN', middleState: 'DOWN', baseY: null, smoothIndexY: 0, smoothMiddleY: 0, lastActiveFinger: null },
-            right: { steps: 0, indexState: 'DOWN', middleState: 'DOWN', baseY: null, smoothIndexY: 0, smoothMiddleY: 0, lastActiveFinger: null }
-        };
+        let currentOtData = JSON.parse(JSON.stringify(originalOtData));
+        let currentNtData = JSON.parse(JSON.stringify(originalNtData));
 
-        const startBtn = document.getElementById('start-btn');
-        const overlayScreen = document.getElementById('overlay-screen');
-        const webcamVideo = document.getElementById('webcam-video');
-        const canvasElement = document.getElementById('game-canvas');
-        const canvasCtx = canvasElement.getContext('2d');
+        let gameMode = 'correct'; 
+        let errorIndices = [];     
+        let selectedCards = [];    
+        let isCompleted = false;   
+        const colLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
 
-        const commandDisplay = document.getElementById('command-display');
-        const scoreP1El = document.getElementById('score-p1');
-        const scoreP2El = document.getElementById('score-p2');
+        /* ─── 高精度毫秒計時器系統 (requestAnimationFrame) ─── */
+        let timerAnimationId = null;
+        let startTime = 0;
+        let elapsedBeforePause = 0;
+        let timerRunning = false;
 
-        async function preloadModel() {
-            try {
-                startBtn.innerText = "正在載入 WASM...";
-                const visionFilesetResolver = await FilesetResolver.forVisionTasks(
-                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm"
-                );
-                startBtn.innerText = "正在載入 AI 手部模型...";
-                handLandmarker = await HandLandmarker.createFromOptions(visionFilesetResolver, {
-                    baseOptions: {
-                        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-                        delegate: "GPU"
-                    },
-                    runningMode: "VIDEO",
-                    numHands: 2
-                });
-                startBtn.disabled = false;
-                startBtn.innerText = "開始遊戲";
-            } catch (err) {
-                startBtn.innerText = "錯誤: " + err.message;
+        function startTimer() {
+            stopTimer();
+            startTime = performance.now();
+            elapsedBeforePause = 0;
+            timerRunning = true;
+            document.getElementById('game-timer').style.display = 'block';
+            runTimerLoop();
+        }
+
+        function pauseTimer() {
+            if (timerRunning) {
+                elapsedBeforePause += performance.now() - startTime;
+                timerRunning = false;
+                if (timerAnimationId) {
+                    cancelAnimationFrame(timerAnimationId);
+                    timerAnimationId = null;
+                }
             }
         }
 
-        preloadModel();
-
-        startBtn.addEventListener('click', async () => {
-            if (!handLandmarker) return;
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-                    audio: false
-                });
-                webcamVideo.srcObject = stream;
-                webcamVideo.addEventListener('loadeddata', () => {
-                    webcamRunning = true;
-                    overlayScreen.style.opacity = '0';
-                    setTimeout(() => overlayScreen.style.display = 'none', 300);
-                    requestAnimationFrame(predictWebcam);
-                });
-            } catch (err) {
-                alert('無法啟用攝影機');
+        function stopTimer() {
+            timerRunning = false;
+            if (timerAnimationId) {
+                cancelAnimationFrame(timerAnimationId);
+                timerAnimationId = null;
             }
-        });
+            elapsedBeforePause = 0;
+        }
 
-        async function predictWebcam() {
-            if (canvasElement.width !== webcamVideo.videoWidth || canvasElement.height !== webcamVideo.videoHeight) {
-                canvasElement.width = webcamVideo.videoWidth;
-                canvasElement.height = webcamVideo.videoHeight;
+        function hideTimer() {
+            stopTimer();
+            document.getElementById('game-timer').style.display = 'none';
+        }
+
+        function runTimerLoop() {
+            if (!timerRunning) return;
+
+            const currentElapsed = elapsedBeforePause + (performance.now() - startTime);
+            updateTimerDisplay(currentElapsed);
+
+            timerAnimationId = requestAnimationFrame(runTimerLoop);
+        }
+
+        function updateTimerDisplay(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const centiseconds = Math.floor((ms % 1000) / 10); // 取到小數點後兩位 (00~99)
+
+            const minStr = String(minutes).padStart(2, '0');
+            const secStr = String(seconds).padStart(2, '0');
+            const csStr = String(centiseconds).padStart(2, '0');
+
+            document.getElementById('game-timer').innerText = `⏱️ ${minStr}:${secStr}.${csStr}`;
+        }
+
+        // 產生 A 到 K 座標軸
+        function renderHeader(headerId) {
+            const header = document.getElementById(headerId);
+            header.innerHTML = "";
+            colLetters.forEach(letter => {
+                const div = document.createElement('div');
+                div.className = 'col-label';
+                div.innerText = letter;
+                header.appendChild(div);
+            });
+        }
+        renderHeader('ot-col-header');
+        renderHeader('nt-col-header');
+
+        // 建立卡片元素
+        function createCard(item, section, r, c) {
+            const card = document.createElement('div');
+            if (item === null) {
+                card.className = 'bopomofo-card empty';
+                return card;
             }
 
-            let startTimeMs = performance.now();
-            if (lastVideoTime !== webcamVideo.currentTime) {
-                lastVideoTime = webcamVideo.currentTime;
-                const handResult = handLandmarker.detectForVideo(webcamVideo, startTimeMs);
+            card.className = 'bopomofo-card';
+            card.onclick = () => handleCardClick(section, r, c, card);
 
-                canvasCtx.save();
-                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            card.dataset.section = section;
+            card.dataset.r = r;
+            card.dataset.c = c;
 
-                let rawHands = handResult.landmarks || [];
-                const w = canvasElement.width;
-                const h = canvasElement.height;
+            const bopomofo = item[1];
+            const toneMarks = ['ˊ', 'ˇ', 'ˋ', '˙'];
+            const symbols = [...bopomofo];
+            const tone = symbols.find(symbol => toneMarks.includes(symbol));
+            const sounds = symbols.filter(symbol => !toneMarks.includes(symbol));
 
-                for (let i = 0; i < rawHands.length; i++) {
-                    const landmarks = rawHands[i];
-                    const wrist = landmarks[0];          
-                    const indexTip = landmarks[8];       
-                    const middleTip = landmarks[12];     
+            const bpmHTML = sounds
+                .map((symbol, index) => `<span class="bpm bpm-${sounds.length}-${index}">${symbol}</span>`)
+                .join('');
+            const toneHTML = tone ? `<span class="bpm tone">${tone}</span>` : '';
+
+            card.innerHTML = `
+                <div class="content-wrapper">
+                    <span class="char">${item[0]}</span>
+                    <span class="bopomofo-text">${bpmHTML}${toneHTML}</span>
+                </div>
+            `;
+            return card;
+        }
+
+        // 渲染畫面
+        function renderAll() {
+            renderSection(currentOtData, 'ot-box', 1, 'ot');
+            renderSection(currentNtData, 'nt-box', 5, 'nt');
+        }
+
+        function renderSection(data, containerId, startRowIndex, sectionName) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = ""; 
+            data.forEach((rowData, r) => {
+                const rowWrapper = document.createElement('div');
+                rowWrapper.className = 'row-wrapper';
+
+                const rowLabel = document.createElement('div');
+                rowLabel.className = 'row-label';
+                rowLabel.innerText = startRowIndex + r;
+                rowWrapper.appendChild(rowLabel);
+
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'row';
+                rowData.forEach((item, c) => {
+                    rowDiv.appendChild(createCard(item, sectionName, r, c));
+                });
+                rowWrapper.appendChild(rowDiv);
+
+                container.appendChild(rowWrapper);
+            });
+        }
+
+        // 切換按鈕模式
+        function setMode(mode) {
+            const mainContainer = document.getElementById('game-main-container');
+            const btnAnswer = document.getElementById('btn-answer');
+            const answerPanel = document.getElementById('answer-panel');
+
+            if (mode === 'correct') {
+                gameMode = mode;
+                selectedCards = []; 
+                isCompleted = false;
+                stopFireworks(); 
+                hideTimer(); // 點選「正確版」時計時器消失
+
+                currentOtData = JSON.parse(JSON.stringify(originalOtData));
+                currentNtData = JSON.parse(JSON.stringify(originalNtData));
+                document.getElementById('game-message').innerText = "正確的書名、注音";
+                btnAnswer.style.display = 'none'; 
+                answerPanel.style.display = 'none';
+                mainContainer.style.opacity = '1';
+                renderAll();
+            } else if (mode === 'wrong') {
+                // 1. 先將主容器淡出
+                mainContainer.style.opacity = '0';
+
+                setTimeout(() => {
+                    gameMode = mode;
+                    selectedCards = []; 
+                    isCompleted = false;
+                    stopFireworks();
                     
-                    let sideKey = wrist.x >= 0.5 ? 'left' : 'right'; 
-                    let stats = sideStats[sideKey];
+                    startTimer(); // 點選或再次點選「錯誤版」時重新計時
 
-                    // 【防飄動：低通濾波器 Low-pass Filter】
-                    // 將當前影格與上一影格的座標進行權重融合（0.6 新數據 + 0.4 舊數據），過濾掉 AI 抖動
-                    if (stats.smoothIndexY === 0) {
-                        stats.smoothIndexY = indexTip.y;
-                        stats.smoothMiddleY = middleTip.y;
-                    } else {
-                        stats.smoothIndexY = stats.smoothIndexY * 0.4 + indexTip.y * 0.6;
-                        stats.smoothMiddleY = stats.smoothMiddleY * 0.4 + middleTip.y * 0.6;
-                    }
+                    generateWrongVersion();
+                    document.getElementById('game-message').innerText = "這裡面有 3 個錯誤的格子，請找碴！";
+                    btnAnswer.style.display = 'block'; 
+                    answerPanel.style.display = 'none'; 
+                    renderAll();
 
-                    // 繪製平滑後的判定點（視覺上也會跟著穩定許多）
-                    canvasCtx.fillStyle = '#00f3ff';
-                    canvasCtx.beginPath();
-                    canvasCtx.arc(wrist.x * w, wrist.y * h, 6, 0, 2 * Math.PI);
-                    canvasCtx.fill();
-
-                    canvasCtx.fillStyle = '#00ffcc';
-                    canvasCtx.beginPath();
-                    canvasCtx.arc(indexTip.x * w, stats.smoothIndexY * h, 10, 0, 2 * Math.PI);
-                    canvasCtx.fill();
-                    canvasCtx.strokeStyle = '#ffffff';
-                    canvasCtx.lineWidth = 2;
-                    canvasCtx.stroke();
-
-                    canvasCtx.beginPath();
-                    canvasCtx.arc(middleTip.x * w, stats.smoothMiddleY * h, 10, 0, 2 * Math.PI);
-                    canvasCtx.fill();
-                    canvasCtx.stroke();
-
-                    // 初始化或動態跟隨計算基準高度
-                    if (stats.baseY === null) {
-                        stats.baseY = (stats.smoothIndexY + stats.smoothMiddleY) / 2;
-                    } else {
-                        stats.baseY = stats.baseY * 0.98 + ((stats.smoothIndexY + stats.smoothMiddleY) / 2) * 0.02;
-                    }
-
-                    // 狀態機：食指判定（加入更嚴格的防抖區間）
-                    if (stats.smoothIndexY < stats.baseY - 0.04) {
-                        if (stats.indexState === 'DOWN' && stats.lastActiveFinger !== 'index') {
-                            stats.indexState = 'UP';
-                            stats.lastActiveFinger = 'index';
-                            stats.steps++;
-                        }
-                    } else if (stats.smoothIndexY > stats.baseY - 0.015) {
-                        stats.indexState = 'DOWN';
-                    }
-
-                    // 狀態機：中指判定
-                    if (stats.smoothMiddleY < stats.baseY - 0.04) {
-                        if (stats.middleState === 'DOWN' && stats.lastActiveFinger !== 'middle') {
-                            stats.middleState = 'UP';
-                            stats.lastActiveFinger = 'middle';
-                            stats.steps++;
-                        }
-                    } else if (stats.smoothMiddleY > stats.baseY - 0.015) {
-                        stats.middleState = 'DOWN';
-                    }
-
-                    if (sideKey === 'left') scoreP1El.innerText = stats.steps;
-                    else scoreP2El.innerText = stats.steps;
-                }
-
-                if (rawHands.length === 0) {
-                    commandDisplay.innerText = "請將食指與中指伸入鏡頭跑步！";
-                } else {
-                    commandDisplay.innerText = `穩定跑步中 🏃‍♂️`;
-                }
-
-                canvasCtx.restore();
-            }
-
-            if (webcamRunning) {
-                requestAnimationFrame(predictWebcam);
+                    // 2. 資料渲染完成後，將主容器淡入
+                    mainContainer.style.opacity = '1';
+                }, 200); 
             }
         }
+
+        // 產生錯誤版邏輯（確保替換前後不相同）
+        function generateWrongVersion() {
+            currentOtData = JSON.parse(JSON.stringify(originalOtData));
+            currentNtData = JSON.parse(JSON.stringify(originalNtData));
+
+            let allValidCells = [];
+            let allItemsPool = [];
+
+            function collect(data, sectionName) {
+                data.forEach((row, r) => {
+                    row.forEach((item, c) => {
+                        if (item !== null) {
+                            allValidCells.push({ section: sectionName, r, c });
+                            allItemsPool.push(item);
+                        }
+                    });
+                });
+            }
+            collect(currentOtData, 'ot');
+            collect(currentNtData, 'nt');
+
+            errorIndices = [];
+            let shuffledCells = [...allValidCells].sort(() => 0.5 - Math.random());
+            let targetCells = shuffledCells.slice(0, 3);
+
+            errorIndices = targetCells.map(cell => {
+                let originalItem = cell.section === 'ot' ? originalOtData[cell.r][cell.c] : originalNtData[cell.r][cell.c];
+                
+                let validPool = allItemsPool.filter(item => !(item[0] === originalItem[0] && item[1] === originalItem[1]));
+                if (validPool.length === 0) validPool = allItemsPool;
+
+                let randomItem = validPool[Math.floor(Math.random() * validPool.length)];
+
+                return {
+                    section: cell.section,
+                    r: cell.r,
+                    c: cell.c,
+                    original: originalItem,
+                    current: randomItem
+                };
+            });
+
+            errorIndices.forEach(err => {
+                if (err.section === 'ot') {
+                    currentOtData[err.r][err.c] = JSON.parse(JSON.stringify(err.current));
+                } else {
+                    currentNtData[err.r][err.c] = JSON.parse(JSON.stringify(err.current));
+                }
+            });
+        }
+
+        // 顯示解答邏輯
+        function showAnswer() {
+            if (gameMode !== 'wrong' || isCompleted) return;
+
+            hideTimer(); // 按下「解答」時計時消失
+
+            const cards = document.querySelectorAll('.bopomofo-card');
+            cards.forEach(card => {
+                if (card.classList.contains('empty')) return;
+                const sec = card.dataset.section;
+                const r = parseInt(card.dataset.r);
+                const c = parseInt(card.dataset.c);
+
+                let isError = errorIndices.some(err => err.section === sec && err.r === r && err.c === c);
+                if (isError) {
+                    card.classList.add('answer-highlight');
+                }
+            });
+
+            const answerContent = document.getElementById('answer-content');
+            answerContent.innerHTML = "";
+
+            errorIndices.forEach(err => {
+                let displayRow = err.section === 'ot' ? (err.r + 1) : (err.r + 5);
+                let displayCol = colLetters[err.c];
+
+                let itemDiv = document.createElement('div');
+                itemDiv.className = 'answer-item';
+                itemDiv.innerHTML = `
+                    <div class="answer-coord">位置：${displayCol}${displayRow}</div>
+                    <div>[錯誤] <b>${err.current[0]}</b> (${err.current[1]})</div>
+                    <div>[正確] <b>${err.original[0]}</b> (${err.original[1]})</div>
+                `;
+                answerContent.appendChild(itemDiv);
+            });
+
+            document.getElementById('answer-panel').style.display = 'block';
+            document.getElementById('game-message').innerText = "💡 顯示解答";
+        }
+
+        // 玩家點擊格子互動邏輯
+        function handleCardClick(section, r, c, cardElement) {
+            if (gameMode !== 'wrong') {
+                document.getElementById('game-message').innerText = "點擊左側「錯誤版」按鈕，進行挑戰！";
+                return;
+            }
+
+            if (isCompleted || cardElement.classList.contains('selected') || cardElement.classList.contains('success-flash')) return;
+
+            if (selectedCards.length >= 3) return;
+
+            cardElement.classList.add('selected');
+            selectedCards.push({ section, r, c, element: cardElement });
+
+            if (selectedCards.length === 3) {
+                checkResult();
+            }
+        }
+
+        // 檢查玩家選擇結果
+        function checkResult() {
+            let correctCount = 0;
+
+            selectedCards.forEach(selected => {
+                let isMatch = errorIndices.some(err => 
+                    err.section === selected.section && err.r === selected.r && err.c === selected.c
+                );
+                if (isMatch) {
+                    correctCount++;
+                }
+            });
+
+            if (correctCount === 3) {
+                isCompleted = true;
+                pauseTimer(); // 完全正確時計時暫停
+                document.getElementById('game-message').innerText = "🎉 太強啦！完全正確";
+                
+                selectedCards.forEach(item => {
+                    item.element.classList.remove('selected');
+                    item.element.classList.add('success-flash');
+                });
+                selectedCards = [];
+
+                document.body.classList.add('sky-mode');
+                startFireworks();
+            } else {
+                document.getElementById('game-message').innerText = `👍 找到 ${correctCount} 個正確的錯誤格子，再試一次！`;
+
+                setTimeout(() => {
+                    if (!isCompleted) {
+                        selectedCards.forEach(item => {
+                            item.element.classList.remove('selected');
+                        });
+                        selectedCards = [];
+                        if (gameMode === 'wrong') {
+                            document.getElementById('game-message').innerText = "【找碴模式】請繼續尋找！";
+                        }
+                    }
+                }, 2000);
+            }
+        }
+
+        /* ─── 強力猛烈版 Canvas 煙火特效系統 ─── */
+        const canvas = document.getElementById('fireworks-canvas');
+        const ctx = canvas.getContext('2d');
+        let fireworks = [];
+        let particles = [];
+        let animationId = null;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Firework {
+            constructor(x, y, targetY) {
+                this.x = x;
+                this.y = y;
+                this.targetY = targetY;
+                this.speed = 6; 
+                this.angle = -Math.PI / 2;
+                this.exploded = false;
+            }
+            update() {
+                this.y += Math.sin(this.angle) * this.speed * 3.5;
+                if (this.y <= this.targetY) {
+                    this.exploded = true;
+                    createParticles(this.x, this.y);
+                }
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#00f5d4';
+                ctx.fill();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 9 + 3; 
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.012 + 0.008; 
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.08; 
+                this.alpha -= this.decay;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(this.alpha, 0);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function createParticles(x, y) {
+            const colors = ['#f72585', '#7209b7', '#3a0ca3', '#4361ee', '#4cc9f0', '#ff0054', '#ffbc42', '#ffffff'];
+            for (let i = 0; i < 90; i++) {
+                particles.push(new Particle(x, y, colors[Math.floor(Math.random() * colors.length)]));
+            }
+        }
+
+        function startFireworks() {
+            if (animationId) return; 
+            
+            function loop() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (Math.random() < 0.15) {
+                    let startX = Math.random() * canvas.width;
+                    let targetY = Math.random() * (canvas.height * 0.6);
+                    fireworks.push(new Firework(startX, canvas.height, targetY));
+                }
+
+                for (let i = fireworks.length - 1; i >= 0; i--) {
+                    fireworks[i].update();
+                    fireworks[i].draw();
+                    if (fireworks[i].exploded) {
+                        fireworks.splice(i, 1);
+                    }
+                }
+
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    particles[i].update();
+                    particles[i].draw();
+                    if (particles[i].alpha <= 0) {
+                        particles.splice(i, 1);
+                    }
+                }
+
+                animationId = requestAnimationFrame(loop);
+            }
+            loop();
+        }
+
+        function stopFireworks() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            fireworks = [];
+            particles = [];
+            document.body.classList.remove('sky-mode'); 
+        }
+
+        // 初始化預設載入正確版
+        renderAll();
     </script>
 </body>
 </html>
